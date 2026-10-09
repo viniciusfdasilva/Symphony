@@ -7,6 +7,7 @@ def Aud_Dialect : Dialect {
   let name = "aud";
   let summary = "Audio effects and synthesizers dialect";
   let cppNamespace = "::mlir::aud";
+  let useDefaultTypePrinterParser = 1;
 }
 
 #endif // AUD_DIALECT

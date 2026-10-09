@@ -8,7 +8,7 @@ cmake -G Ninja -S "$ROOT/third_party/llvm-project/llvm" -B "$ROOT/build-llvm" \
   -DLLVM_ENABLE_ASSERTIONS=ON \
   -DLLVM_INSTALL_UTILS=ON \
   -DLLVM_ENABLE_LLD=ON \
-  -DLLVM_CCACHE_BUILD=ON \
+  -DLLVM_CCACHE_BUILD=OFF \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_INSTALL_PREFIX="$ROOT/.local/llvm"
 cmake --build "$ROOT/build-llvm"

@@ -7,6 +7,8 @@ set(LIBS
   ${conversion_libs}
   ${extension_libs}
   MLIROptLib
+  MLIRRegisterAllDialects
+  MLIRRegisterAllPasses
   MLIRAud
 )
 

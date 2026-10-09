@@ -7,8 +7,11 @@ add_mlir_dialect_library(MLIRAud
 
   DEPENDS
   MLIRAudOpsIncGen
+  MLIRAudTypesIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR
+  MLIRBytecodeOpInterface
+  MLIRInferTypeOpInterface
   MLIRSideEffectInterfaces
 )

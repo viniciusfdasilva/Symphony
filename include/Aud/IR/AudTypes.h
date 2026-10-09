@@ -4,4 +4,4 @@
 #include "mlir/IR/Types.h"
 
 #define GET_TYPEDEF_CLASSES
-#include "Aud/AudTypes.h.inc"
+#include "Aud/IR/AudTypes.h.inc"

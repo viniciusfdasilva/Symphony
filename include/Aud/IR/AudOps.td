@@ -4,8 +4,8 @@
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
-include "Aud/AudDialect.td"
-include "Aud/AudTypes.td"
+include "Aud/IR/AudDialect.td"
+include "Aud/IR/AudTypes.td"
 
 class Aud_Op<string mnemonic, list<Trait> traits = []> :
     Op<Aud_Dialect, mnemonic, traits>;

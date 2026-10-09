@@ -2,7 +2,7 @@
 #define AUD_TYPES
 
 include "mlir/IR/AttrTypeBase.td"
-include "Aud/AudDialect.td"
+include "Aud/IR/AudDialect.td"
 
 class Aud_Type<string name, string typeMnemonic, list<Trait> traits = []>
     : TypeDef<Aud_Dialect, name, traits> {

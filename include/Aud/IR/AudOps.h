@@ -7,7 +7,7 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-#include "Aud/AudTypes.h"
+#include "Aud/IR/AudTypes.h"
 
 #define GET_OP_CLASSES
-#include "Aud/AudOps.h.inc"
+#include "Aud/IR/AudOps.h.inc"

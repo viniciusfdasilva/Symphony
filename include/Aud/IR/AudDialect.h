@@ -2,4 +2,4 @@
 
 #include "mlir/IR/Dialect.h"
 
-#include "Aud/AudOpsDialect.h.inc"
+#include "Aud/IR/AudOpsDialect.h.inc"

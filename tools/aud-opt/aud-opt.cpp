@@ -3,7 +3,7 @@
 #include "mlir/InitAllPasses.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
-#include "Aud/AudDialect.h"
+#include "Aud/IR/AudDialect.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();

@@ -1,6 +1,6 @@
-#include "Aud/AudDialect.h"
-#include "Aud/AudOps.h"
-#include "Aud/AudTypes.h"
+#include "Aud/IR/AudDialect.h"
+#include "Aud/IR/AudOps.h"
+#include "Aud/IR/AudTypes.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -9,18 +9,18 @@
 using namespace mlir;
 using namespace mlir::aud;
 
-#include "Aud/AudOpsDialect.cpp.inc"
+#include "Aud/IR/AudOpsDialect.cpp.inc"
 
 #define GET_TYPEDEF_CLASSES
-#include "Aud/AudTypes.cpp.inc"
+#include "Aud/IR/AudTypes.cpp.inc"
 
 void AudDialect::initialize() {
   addTypes<
 #define GET_TYPEDEF_LIST
-#include "Aud/AudTypes.cpp.inc"
+#include "Aud/IR/AudTypes.cpp.inc"
       >();
   addOperations<
 #define GET_OP_LIST
-#include "Aud/AudOps.cpp.inc"
+#include "Aud/IR/AudOps.cpp.inc"
       >();
 }

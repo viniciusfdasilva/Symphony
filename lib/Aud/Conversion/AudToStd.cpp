@@ -82,6 +82,28 @@ struct AddLowering : OpConversionPattern<AddOp> {
   }
 };
 
+
+struct SubLowering : OpConversionPattern<SubOp> {
+  using OpConversionPattern::OpConversionPattern;
+  
+  LogicalResult matchAndRewrite(SubOp op, OpAdaptor adaptor, ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+    Value lhs = adaptor.getLhs(), rhs = adaptor.getRhs();
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
+      Value a = memref::LoadOp::create(b, l, lhs, ValueRange{i});
+      Value c = memref::LoadOp::create(b, l, rhs, ValueRange{i});
+      Value s = arith::SubFOp::create(b, l, a, c);
+      memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+};
+
 struct OscLowering : OpConversionPattern<OscOp> {
   OscLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
       : OpConversionPattern<OscOp>(tc, ctx), sampleRate(sampleRate) {}
@@ -186,7 +208,7 @@ struct ConvertAudToStdPass
     });
 
     RewritePatternSet patterns(ctx);
-    patterns.add<GainLowering, AddLowering, CastLowering>(tc, ctx);
+    patterns.add<GainLowering, AddLowering, SubLowering, CastLowering>(tc, ctx);
     patterns.add<OscLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);

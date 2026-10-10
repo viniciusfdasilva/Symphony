@@ -24,6 +24,13 @@ def Aud_AddOp : Aud_Op<"add", [Pure, Commutative, SameOperandsAndResultType]> {
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
 }
 
+def Aud_SubOp : Aud_Op<"sub", [Pure, SameOperandsAndResultType]>{
+  let summary   = "Sample-wise subtract two signals";
+  let arguments = (ins Aud_SigType:$lhs, Aud_SigType:$rhs);
+  let results   = (outs Aud_SigType:$output);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)"; 
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

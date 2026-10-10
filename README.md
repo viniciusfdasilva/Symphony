@@ -18,7 +18,7 @@ delays, envelopes, mixers).
 ## Operations:
 Actually `Symphony` provides two operations: 
 * `aud.osc` :  Define a signal by its frequency (e.g., 440 Hz, note A).
-* `aud.gain`:  Control the signal amplitude. Its formula is: \[y(t) = G \cdot x(t)\].
+* `aud.gain`:  Control the signal amplitude. Its formula is: $y(t) = G \cdot x(t)$
 * `aud.add` :  Sums two audio signals sample by sample, mixing them into one.
 ## Example (illustrative syntax)
 

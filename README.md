@@ -1,3 +1,6 @@
+<img width="1983" height="793" alt="28f87e8f-071f-472a-adb7-ce29ee4f1561" src="https://github.com/user-attachments/assets/f117df88-18f5-425d-98a4-fb1963289dd2" />
+
+
 # Symphony
 An MLIR dialect for audio effects and synthesizers.
 

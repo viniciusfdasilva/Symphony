@@ -4,9 +4,11 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "Aud/IR/AudDialect.h"
+#include "Aud/Conversion/AudPasses.h"
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
+  mlir::aud::registerAudPasses();
 
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);

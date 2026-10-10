@@ -1,5 +1,5 @@
 # Symphony
-An MLIR dialect for audio effects and synthesizers, compiling signal graphs to real-time-safe native code and WebAssembly.
+An MLIR dialect for audio effects and synthesizers.
 
 # aud-mlir
 
@@ -7,47 +7,66 @@ An out-of-tree [MLIR](https://mlir.llvm.org) dialect for audio effects and
 synthesizers.
 
 `aud` lets you describe an audio processing graph (oscillators, filters,
-delays, envelopes, mixers) at a high level and compiles it down to a
-block-based `process(in, out, n)` function that can run as native code,
-in WebAssembly (AudioWorklet), or inside a plugin.
+delays, envelopes, mixers).
 
 > **Status:** early stage / experimental. The dialect is under design;
 > syntax and operation names may change.
 
-## Why a dialect?
-
-General-purpose compilers see audio code as plain loops. Working at the
-domain level makes optimizations possible that they cannot express, such as:
-
-- fusing a whole effect chain into a single loop with no intermediate buffers
-- algebraic simplification (e.g. merging consecutive gains)
-- constant-folding filter coefficients at compile time
-- vectorizing voices and channels
-
-## Design goals
-
-- Explicit, reentrant state for filters, delays and oscillators
-- Block processing with separate audio-rate and control-rate signals
-- Real-time safe output: no allocation or locks on the audio path
-- Multiple targets from one description: native, ARM, WebAssembly, plugins
-
+## Operations:
+Actually `Symphony` provides two operations: 
+* `aud.osc` :  Define a signal by its frequency (e.g., 440 Hz, note A).
+* `aud.gain`:  Control the signal amplitude. Its formula is: \[y(t) = G \cdot x(t)\].
+* `aud.add` :  Sums two audio signals sample by sample, mixing them into one.
 ## Example (illustrative syntax)
 
-    func.func @fx(%in: !aud.sig<f32>) -> !aud.sig<f32> {
-      %lp   = aud.biquad %in {type = "lowpass", freq = 2000.0 : f32, q = 0.7 : f32}
-              : !aud.sig<f32>
-      %dist = aud.tanh %lp {drive = 4.0 : f32} : !aud.sig<f32>
-      %out  = aud.gain %dist {db = -6.0 : f32} : !aud.sig<f32>
-      return %out : !aud.sig<f32>
-    }
+```mlir
+// Defining a signal as a frequency and modifying its gain
+func.func @fx() -> !aud.sig<f32> attributes {llvm.emit_c_interface} {
+  %a = aud.osc {freq = 440.0 : f32} : !aud.sig<f32>  
+  %o = aud.gain %a {db = -6.0 : f32} : !aud.sig<f32>
+  return %o : !aud.sig<f32>
+}
+```
+
+```mlir
+// Creating an A major chord by first summing the frequencies of the cluster `A + C#` (a major third), then adding `E`, the fifth of the A major scale.
+func.func @fx() -> !aud.sig<f32> attributes {llvm.emit_c_interface} {
+  %a4       = aud.osc {freq = 220.0  : f32, shape = "sine"} : !aud.sig<f32>
+  %c5_sharp = aud.osc {freq = 554.37 : f32, shape = "sine"} : !aud.sig<f32>
+  %e5       = aud.osc {freq = 659.25 : f32, shape = "sine"} : !aud.sig<f32>
+  %cluster  = aud.add %a4, %c5_sharp : !aud.sig<f32>
+  %a_chord    = aud.add %c5_sharp, %e5 : !aud.sig<f32>
+  return %a_chord : !aud.sig<f32>
+}
+```
+
+## Get Started:
+
+Requires Linux (or WSL2), `cmake` (≥ 3.20), `ninja`, `clang`, `lld`, `ccache`, `git` and `python3`.
+
+```bash
+git clone --recurse-submodules <repo-url> Symphony
+cd Symphony
+
+./scripts/build-llvm.sh
+./scripts/build.sh
+```
+
+## Run:
+> WANT TO HEAR WHAT YOU PROGRAMMED?
+
+##### Symphony provides a script to play what you've programmed.
+
+```bash
+./build/bin/aud-opt examples/chord.mlir
+./scripts/play.sh aplay examples/chord.mlir 2
+```
+
+`play.sh` usage: `<player> <input.mlir> [seconds] [output.wav]`. Use `none` as the player to only generate the WAV.
+
 
 ## Related work
 
 - [DSP-MLIR](https://github.com/tridhapuku/DSP_MLIR): a general-purpose DSP
   dialect and DSL for MLIR, used here as a design reference
 - [Faust](https://faust.grame.fr): functional language for audio DSP
-
-## Building
-
-Requires LLVM/MLIR built from source (version pinned in this README), CMake
-and Ninja. See the build instructions below.

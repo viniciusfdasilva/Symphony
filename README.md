@@ -48,7 +48,7 @@ func.func @fx() -> !aud.sig<f32> attributes {llvm.emit_c_interface} {
 Requires Linux (or WSL2), `cmake` (≥ 3.20), `ninja`, `clang`, `lld`, `ccache`, `git` and `python3`.
 
 ```bash
-git clone --recurse-submodules <repo-url> Symphony
+git clone --recurse-submodules https://github.com/viniciusfdasilva/Symphony.git
 cd Symphony
 
 ./scripts/build-llvm.sh

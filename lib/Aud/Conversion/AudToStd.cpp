@@ -104,7 +104,6 @@ struct SubLowering : OpConversionPattern<SubOp> {
   }
 };
 
-
 struct MulLowering : OpConversionPattern<MulOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -120,6 +119,30 @@ struct MulLowering : OpConversionPattern<MulOp> {
       Value x = memref::LoadOp::create(b,l, freq, ValueRange{i});
       Value y = arith::MulFOp::create(b, l, x, k);
       memref::StoreOp::create(b, l, y, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+};
+
+
+struct DivLowering : OpConversionPattern<DivOp> {
+  using OpConversionPattern::OpConversionPattern;
+
+  LogicalResult matchAndRewrite(DivOp op, OpAdaptor adaptor, ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out  = memref::AllocOp::create(rw, loc, ty);
+    Value freq = adaptor.getFreq();
+    float factor = static_cast<float>(adaptor.getFactor().convertToDouble());
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(factor));
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i){
+      Value x = memref::LoadOp::create(b, l, freq, ValueRange{i});
+      Value y = arith::DivFOp::create(b, l, x, k);
+      memref::StoreOp::create(b,l,y,out, ValueRange{i});
     });
 
     rw.replaceOp(op, out);
@@ -231,7 +254,7 @@ struct ConvertAudToStdPass
     });
 
     RewritePatternSet patterns(ctx);
-    patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering>(tc, ctx);
+    patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering, DivLowering>(tc, ctx);
     patterns.add<OscLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);

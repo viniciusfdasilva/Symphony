@@ -29,13 +29,21 @@ def Aud_SubOp : Aud_Op<"sub", [Pure, SameOperandsAndResultType]>{
   let arguments = (ins Aud_SigType:$lhs, Aud_SigType:$rhs);
   let results   = (outs Aud_SigType:$output);
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)"; 
-}
+}   
 
 def Aud_MulOp : Aud_Op<"mul", [Pure, SameOperandsAndResultType]> {
   let summary = "Multiplies a signal by a constant (linear) factor";
   let arguments = (ins Aud_SigType:$freq, F32Attr:$factor);
   let results = (outs Aud_SigType:$output);
   let assemblyFormat = "$freq `,` $factor attr-dict `:` type($output)";
+}
+
+def Aud_DivOp : Aud_Op<"div", [Pure, SameOperandsAndResultType]> {
+  let summary = "Division of a signal by a constant (linear) factor";
+  let arguments = (ins Aud_SigType:$freq, F32Attr:$factor);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$freq `,` $factor attr-dict `:` type($output)";
+  let hasVerifier = 1;
 }
 
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {

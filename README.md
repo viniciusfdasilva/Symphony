@@ -52,7 +52,7 @@ git clone --recurse-submodules https://github.com/viniciusfdasilva/Symphony.git
 cd Symphony
 
 ./scripts/build-llvm.sh
-./scripts/build.sh
+./scripts/build-symphony.sh
 ```
 
 ## Run:

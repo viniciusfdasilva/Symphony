@@ -31,6 +31,13 @@ def Aud_SubOp : Aud_Op<"sub", [Pure, SameOperandsAndResultType]>{
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)"; 
 }
 
+def Aud_MulOp : Aud_Op<"mul", [Pure, SameOperandsAndResultType]> {
+  let summary = "Multiplies a signal by a constant (linear) factor";
+  let arguments = (ins Aud_SigType:$freq, F32Attr:$factor);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$freq `,` $factor attr-dict `:` type($output)";
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

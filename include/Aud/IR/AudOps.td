@@ -46,6 +46,13 @@ def Aud_DivOp : Aud_Op<"div", [Pure, SameOperandsAndResultType]> {
   let hasVerifier = 1;
 }
 
+def Aud_TransposeOp : Aud_Op<"transpose", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Transposition of a signal by a constant factor (in semitone)";
+  let arguments = (ins Aud_SigType:$freq, I32Attr:$semitone);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$freq `,` $semitone attr-dict `:` type($output)";
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

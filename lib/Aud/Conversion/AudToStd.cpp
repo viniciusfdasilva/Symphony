@@ -13,7 +13,10 @@
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/DialectConversion.h"
 
+#include "llvm/Support/Debug.h"
 #include <cmath>
+
+#define DEBUG_TYPE "transpose-debug"
 
 using namespace mlir;
 using namespace mlir::aud;
@@ -150,6 +153,44 @@ struct DivLowering : OpConversionPattern<DivOp> {
   }
 };
 
+struct TransposeLowering : OpConversionPattern<TransposeOp> {
+  TransposeLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+      : OpConversionPattern<TransposeOp>(tc, ctx), sampleRate(sampleRate) {}
+
+  LogicalResult
+  matchAndRewrite(TransposeOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+
+    auto osc = op.getFreq().getDefiningOp<OscOp>();
+    if (!osc)
+      return rw.notifyMatchFailure(op, "input must come directly from aud.osc");
+
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+
+    int32_t semitone = op.getSemitone();
+    double newHz = osc.getFreq().convertToDouble() * std::pow(2.0, semitone / 12.0);
+    double step = 2.0 * M_PI * newHz / sampleRate;
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+
+    buildLoop(rw, loc, ty.getDimSize(0),
+              [&](OpBuilder &b, Location l, Value i) {
+                Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
+                Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
+                Value ph = arith::MulFOp::create(b, l, iF, k);
+                Value s = math::SinOp::create(b, l, ph);
+                memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+
+  private:
+    double sampleRate;
+};
+
 struct OscLowering : OpConversionPattern<OscOp> {
   OscLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
       : OpConversionPattern<OscOp>(tc, ctx), sampleRate(sampleRate) {}
@@ -255,7 +296,7 @@ struct ConvertAudToStdPass
 
     RewritePatternSet patterns(ctx);
     patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering, DivLowering>(tc, ctx);
-    patterns.add<OscLowering>(tc, ctx, sr);
+    patterns.add<OscLowering, TransposeLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);
     populateCallOpTypeConversionPattern(patterns, tc);

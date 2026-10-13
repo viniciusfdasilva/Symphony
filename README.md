@@ -15,6 +15,10 @@ delays, envelopes, mixers).
 > **Status:** early stage / experimental. The dialect is under design;
 > syntax and operation names may change.
 
+## Playlist on YouTube
+
+[take a look](https://www.youtube.com/playlist?list=PLZXF2-PR36ak)
+
 ## Operations:
 Actually `Symphony` provides two operations: 
 * `aud.osc` :  Define a signal by its frequency (e.g., 440 Hz, note A).
@@ -52,7 +56,7 @@ git clone --recurse-submodules https://github.com/viniciusfdasilva/Symphony.git
 cd Symphony
 
 ./scripts/build-llvm.sh
-./scripts/build.sh
+./scripts/build-symphony.sh
 ```
 
 ## Run:

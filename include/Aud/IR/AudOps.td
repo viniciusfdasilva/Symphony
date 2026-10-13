@@ -53,6 +53,13 @@ def Aud_TransposeOp : Aud_Op<"transpose", [Pure, SameOperandsAndResultType]> {
   let assemblyFormat = "$freq `,` $semitone attr-dict `:` type($output)";
 }
 
+def Aud_AvgOp : Aud_Op<"avg", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Average between two signals";
+  let arguments = (ins Aud_SigType:$lhs, Aud_SigType:$rhs);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

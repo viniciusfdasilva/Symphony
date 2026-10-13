@@ -36,6 +36,14 @@ void buildLoop(OpBuilder &b, Location loc, int64_t n, BodyFn body) {
                      });
 }
 
+static Value generate_sound(Value k, OpBuilder b, Location l, Value i)
+  {
+    Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
+    Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
+    Value ph = arith::MulFOp::create(b, l, iF, k);
+    return math::SinOp::create(b, l, ph);
+}
+
 struct GainLowering : OpConversionPattern<GainOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -176,10 +184,7 @@ struct TransposeLowering : OpConversionPattern<TransposeOp> {
 
     buildLoop(rw, loc, ty.getDimSize(0),
               [&](OpBuilder &b, Location l, Value i) {
-                Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
-                Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
-                Value ph = arith::MulFOp::create(b, l, iF, k);
-                Value s = math::SinOp::create(b, l, ph);
+                Value s = generate_sound(k, b, l, i);
                 memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -203,14 +208,13 @@ struct OscLowering : OpConversionPattern<OscOp> {
     Value out = memref::AllocOp::create(rw, loc, ty);
 
     double freq = op.getFreqAttr().getValueAsDouble();
+
     double step = 2.0 * M_PI * freq / sampleRate;
     Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
 
     buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
-      Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
-      Value ph = arith::MulFOp::create(b, l, iF, k);
-      Value s = math::SinOp::create(b, l, ph);
+      
+      Value s = generate_sound(k, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -222,6 +226,40 @@ private:
   double sampleRate;
 };
 
+struct AvgLowering : OpConversionPattern<AvgOp> {
+  AvgLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+      : OpConversionPattern<AvgOp>(tc, ctx), sampleRate(sampleRate) {}
+
+  LogicalResult
+  matchAndRewrite(AvgOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+
+    auto lhs = op.getLhs().getDefiningOp<OscOp>();
+    auto rhs = op.getRhs().getDefiningOp<OscOp>();
+
+    double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
+    double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
+
+    double avg_freq_in_hz  = static_cast<double>((freq_lhs_in_hz+freq_rhs_in_hz)/2.0);
+    double step = 2.0 * M_PI * avg_freq_in_hz / sampleRate;
+    
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(k, b, l, i);
+      memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+
+private:
+  double sampleRate;
+};
 
 struct CastLowering : OpConversionPattern<UnrealizedConversionCastOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -296,7 +334,7 @@ struct ConvertAudToStdPass
 
     RewritePatternSet patterns(ctx);
     patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering, DivLowering>(tc, ctx);
-    patterns.add<OscLowering, TransposeLowering>(tc, ctx, sr);
+    patterns.add<OscLowering, TransposeLowering, AvgLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);
     populateCallOpTypeConversionPattern(patterns, tc);

@@ -60,6 +60,20 @@ def Aud_AvgOp : Aud_Op<"avg", [Pure, SameOperandsAndResultType]> {
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
 }
 
+def Aud_MinOp : Aud_Op<"min", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Min between two signals";
+  let arguments = (ins Aud_SigType:$lhs, Aud_SigType:$rhs);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
+}
+
+def Aud_MaxOp : Aud_Op<"max", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Max between two signals";
+  let arguments = (ins Aud_SigType:$lhs, Aud_SigType:$rhs);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

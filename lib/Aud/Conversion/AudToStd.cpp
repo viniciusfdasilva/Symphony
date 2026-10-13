@@ -261,6 +261,78 @@ private:
   double sampleRate;
 };
 
+
+struct MinLowering : OpConversionPattern<MinOp> {
+  MinLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+      : OpConversionPattern<MinOp>(tc, ctx), sampleRate(sampleRate) {}
+
+  LogicalResult
+  matchAndRewrite(MinOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+
+    auto lhs = op.getLhs().getDefiningOp<OscOp>();
+    auto rhs = op.getRhs().getDefiningOp<OscOp>();
+
+    double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
+    double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
+
+    double min_freq_in_hz  = static_cast<double>(std::min(freq_lhs_in_hz, freq_rhs_in_hz));
+    double step = 2.0 * M_PI * min_freq_in_hz / sampleRate;
+    
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(k, b, l, i);
+      memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+
+private:
+  double sampleRate;
+};
+
+
+struct MaxLowering : OpConversionPattern<MaxOp> {
+  MaxLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+      : OpConversionPattern<MaxOp>(tc, ctx), sampleRate(sampleRate) {}
+
+  LogicalResult
+  matchAndRewrite(MaxOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+
+    auto lhs = op.getLhs().getDefiningOp<OscOp>();
+    auto rhs = op.getRhs().getDefiningOp<OscOp>();
+
+    double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
+    double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
+
+    double min_freq_in_hz  = static_cast<double>(std::max(freq_lhs_in_hz, freq_rhs_in_hz));
+    double step = 2.0 * M_PI * min_freq_in_hz / sampleRate;
+    
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(k, b, l, i);
+      memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+
+private:
+  double sampleRate;
+};
+
 struct CastLowering : OpConversionPattern<UnrealizedConversionCastOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -334,7 +406,7 @@ struct ConvertAudToStdPass
 
     RewritePatternSet patterns(ctx);
     patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering, DivLowering>(tc, ctx);
-    patterns.add<OscLowering, TransposeLowering, AvgLowering>(tc, ctx, sr);
+    patterns.add<OscLowering, TransposeLowering, AvgLowering, MinLowering, MaxLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);
     populateCallOpTypeConversionPattern(patterns, tc);

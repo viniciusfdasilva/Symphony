@@ -74,6 +74,14 @@ def Aud_MaxOp : Aud_Op<"max", [Pure, SameOperandsAndResultType]> {
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($output)";
 }
 
+def Aud_ClampOp : Aud_Op<"clamp", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Clamp between two signals";
+  let arguments = (ins Aud_SigType:$freq, F32Attr:$min, F32Attr:$max);
+  let results = (outs Aud_SigType:$output);
+  let assemblyFormat = "$freq `,` $min `,` $max attr-dict `:` type($output)";
+  let hasVerifier = 1;
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
   let arguments = (ins F32Attr:$freq);

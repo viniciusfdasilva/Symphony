@@ -333,6 +333,44 @@ private:
   double sampleRate;
 };
 
+
+struct ClampLowering : OpConversionPattern<ClampOp> {
+  ClampLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+      : OpConversionPattern<ClampOp>(tc, ctx), sampleRate(sampleRate) {}
+
+  LogicalResult
+  matchAndRewrite(ClampOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rw) const override {
+    Location loc = op.getLoc();
+    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+    Value out = memref::AllocOp::create(rw, loc, ty);
+
+    auto freq = op.getFreq().getDefiningOp<OscOp>();
+    double freq_in_hz = freq.getFreqAttr().getValueAsDouble();
+
+    double max = static_cast<double>(adaptor.getMax().convertToDouble());
+    double min = static_cast<double>(adaptor.getMin().convertToDouble());
+
+    double clamped_freq_in_hz = std::clamp(freq_in_hz, min, max);
+    
+    double step = 2.0 * M_PI * clamped_freq_in_hz / sampleRate;
+    
+    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+
+    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(k, b, l, i);
+      memref::StoreOp::create(b, l, s, out, ValueRange{i});
+    });
+
+    rw.replaceOp(op, out);
+    return success();
+  }
+
+private:
+  double sampleRate;
+};
+
+
 struct CastLowering : OpConversionPattern<UnrealizedConversionCastOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -406,7 +444,7 @@ struct ConvertAudToStdPass
 
     RewritePatternSet patterns(ctx);
     patterns.add<GainLowering, AddLowering, SubLowering, CastLowering, MulLowering, DivLowering>(tc, ctx);
-    patterns.add<OscLowering, TransposeLowering, AvgLowering, MinLowering, MaxLowering>(tc, ctx, sr);
+    patterns.add<OscLowering, TransposeLowering, AvgLowering, MinLowering, MaxLowering, ClampLowering>(tc, ctx, sr);
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(patterns, tc);
     populateReturnOpTypeConversionPattern(patterns, tc);
     populateCallOpTypeConversionPattern(patterns, tc);

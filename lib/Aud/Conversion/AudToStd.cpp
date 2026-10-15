@@ -16,7 +16,7 @@
 #include "llvm/Support/Debug.h"
 #include <cmath>
 
-#define DEBUG_TYPE "transpose-debug"
+#define DEBUG_TYPE "symphony-debug"
 
 using namespace mlir;
 using namespace mlir::aud;
@@ -208,6 +208,9 @@ struct OscLowering : OpConversionPattern<OscOp> {
     Value out = memref::AllocOp::create(rw, loc, ty);
 
     double freq = op.getFreqAttr().getValueAsDouble();
+    int samples = op.getSamplesAttr().getInt();
+
+    LLVM_DEBUG(llvm::dbgs() << samples << "\n");
 
     double step = 2.0 * M_PI * freq / sampleRate;
     Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));

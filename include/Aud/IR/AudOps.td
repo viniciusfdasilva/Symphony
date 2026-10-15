@@ -84,7 +84,8 @@ def Aud_ClampOp : Aud_Op<"clamp", [Pure, SameOperandsAndResultType]> {
 
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
-  let arguments = (ins F32Attr:$freq);
+  let arguments = (ins F32Attr:$freq,
+                       ConfinedAttr<I32Attr, [IntPositive]>:$samples);
   let results = (outs Aud_SigType:$output);
   let assemblyFormat = "attr-dict `:` type($output)";
 }

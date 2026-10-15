@@ -11,8 +11,8 @@ class Aud_Type<string name, string typeMnemonic, list<Trait> traits = []>
 
 def Aud_SigType : Aud_Type<"Sig", "sig"> {
   let summary = "Audio-rate signal";
-  let parameters = (ins "Type":$elementType);
-  let assemblyFormat = "`<` $elementType `>`";
+  let parameters = (ins "Type":$elementType, "Type":$samples);
+  let assemblyFormat = "`<` $elementType `,` $samples `>`";
 }
 
 #endif // AUD_TYPES

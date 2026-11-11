@@ -16,7 +16,7 @@
 #include "llvm/Support/Debug.h"
 #include <cmath>
 
-#define DEBUG_TYPE "transpose-debug"
+#define DEBUG_TYPE "symphony-debug"
 
 using namespace mlir;
 using namespace mlir::aud;
@@ -36,14 +36,48 @@ void buildLoop(OpBuilder &b, Location loc, int64_t n, BodyFn body) {
                      });
 }
 
-static Value generate_sound(Value k, OpBuilder b, Location l, Value i)
-  {
-    Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
-    Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
-    Value ph = arith::MulFOp::create(b, l, iF, k);
-    return math::SinOp::create(b, l, ph);
-}
+static Value generate_sound(WaveShape shape, Value k, OpBuilder b, Location l, Value i)
+{
 
+  auto cst = [&](double v) -> Value{
+    return arith::ConstantOp::create(b, l, b.getF32FloatAttr(v));
+  };
+
+  auto frac = [&](Value x) -> Value{
+    return arith::SubFOp::create(b, l, x, math::FloorOp::create(b, l, x));
+  };
+
+  Value iI = arith::IndexCastOp::create(b, l, b.getI64Type(), i);
+  Value iF = arith::SIToFPOp::create(b, l, b.getF32Type(), iI);
+  Value p  = frac(arith::MulFOp::create(b, l, iF, k));
+
+  switch (shape)
+  {
+    case WaveShape::Sine: {
+      Value x = arith::MulFOp::create(b, l, p, cst(2.0 * M_PI));
+      return math::SinOp::create(b, l, x);
+    }
+
+    case WaveShape::Square:
+    case WaveShape::Pulse: {
+      Value lt = arith::CmpFOp::create(b, l, arith::CmpFPredicate::OLT, p, cst(0.5));
+      return arith::SelectOp::create(b, l, lt, cst(1.0), cst(-1.0));
+    }
+  
+    case WaveShape::Saw: {
+      Value x = arith::MulFOp::create(b, l, p, cst(2.0));
+      return arith::SubFOp::create(b, l, x, cst(1.0));
+    }
+
+    case WaveShape::Triangle: {
+      Value q = frac(arith::AddFOp::create(b, l, p, cst(0.25)));
+      Value t = arith::SubFOp::create(b, l, arith::MulFOp::create(b, l, q, cst(2.0)), cst(1.0));
+      Value a = math::AbsFOp::create(b, l, t);
+      return arith::SubFOp::create(b, l, cst(1.0), arith::MulFOp::create(b, l, a, cst(2.0)));
+    }
+  }
+  llvm_unreachable("unhandled WaveShape");
+}
 struct GainLowering : OpConversionPattern<GainOp> {
   using OpConversionPattern::OpConversionPattern;
 
@@ -78,8 +112,11 @@ struct AddLowering : OpConversionPattern<AddOp> {
                   ConversionPatternRewriter &rw) const override {
     Location loc = op.getLoc();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
-    Value out = memref::AllocOp::create(rw, loc, ty);
     Value lhs = adaptor.getLhs(), rhs = adaptor.getRhs();
+
+    // tamanho lido do operando (index)
+    Value n = memref::DimOp::create(rw, loc, lhs, 0);
+    Value out = memref::AllocOp::create(rw, loc, ty, ValueRange{n});
 
     buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
       Value a = memref::LoadOp::create(b, l, lhs, ValueRange{i});
@@ -92,7 +129,6 @@ struct AddLowering : OpConversionPattern<AddOp> {
     return success();
   }
 };
-
 
 struct SubLowering : OpConversionPattern<SubOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -174,6 +210,7 @@ struct TransposeLowering : OpConversionPattern<TransposeOp> {
     if (!osc)
       return rw.notifyMatchFailure(op, "input must come directly from aud.osc");
 
+    WaveShape shape = osc.getShape();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
     Value out = memref::AllocOp::create(rw, loc, ty);
 
@@ -184,7 +221,7 @@ struct TransposeLowering : OpConversionPattern<TransposeOp> {
 
     buildLoop(rw, loc, ty.getDimSize(0),
               [&](OpBuilder &b, Location l, Value i) {
-                Value s = generate_sound(k, b, l, i);
+                Value s = generate_sound(shape, k, b, l, i);
                 memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -205,16 +242,27 @@ struct OscLowering : OpConversionPattern<OscOp> {
                   ConversionPatternRewriter &rw) const override {
     Location loc = op.getLoc();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
-    Value out = memref::AllocOp::create(rw, loc, ty);
 
     double freq = op.getFreqAttr().getValueAsDouble();
+    WaveShape shape = op.getShape();
 
-    double step = 2.0 * M_PI * freq / sampleRate;
-    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+    int64_t samples = op.getSamplesAttr().getInt();
 
-    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      
-      Value s = generate_sound(k, b, l, i);
+    Value out;
+    if (ty.isDynamicDim(0)) {
+      Value n = arith::ConstantIndexOp::create(rw, loc, samples);
+      out = memref::AllocOp::create(rw, loc, ty, ValueRange{n});
+    } else {
+      if (ty.getDimSize(0) != samples)
+        return rw.notifyMatchFailure(op, "result size doesn't match samples");
+      out = memref::AllocOp::create(rw, loc, ty);
+    }
+
+    double k = freq / sampleRate;
+    Value kV = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(k));
+
+    buildLoop(rw, loc, samples, [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(shape, kV, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -240,8 +288,14 @@ struct AvgLowering : OpConversionPattern<AvgOp> {
     auto lhs = op.getLhs().getDefiningOp<OscOp>();
     auto rhs = op.getRhs().getDefiningOp<OscOp>();
 
+    if (!lhs || !rhs)
+      return rw.notifyMatchFailure(op, "avg operands must be produced by aud.osc");
+
     double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
     double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
+
+    OscOp winner = (freq_lhs_in_hz >= freq_rhs_in_hz) ? lhs : rhs;
+    WaveShape shape = winner.getShape();
 
     double avg_freq_in_hz  = static_cast<double>((freq_lhs_in_hz+freq_rhs_in_hz)/2.0);
     double step = 2.0 * M_PI * avg_freq_in_hz / sampleRate;
@@ -249,7 +303,7 @@ struct AvgLowering : OpConversionPattern<AvgOp> {
     Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
 
     buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      Value s = generate_sound(k, b, l, i);
+      Value s = generate_sound(shape, k, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -271,21 +325,25 @@ struct MinLowering : OpConversionPattern<MinOp> {
                   ConversionPatternRewriter &rw) const override {
     Location loc = op.getLoc();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
-    Value out = memref::AllocOp::create(rw, loc, ty);
-
     auto lhs = op.getLhs().getDefiningOp<OscOp>();
     auto rhs = op.getRhs().getDefiningOp<OscOp>();
+
+    if (!lhs || !rhs)
+      return rw.notifyMatchFailure(op, "min operands must be produced by aud.osc");
 
     double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
     double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
 
+    OscOp winner = (freq_lhs_in_hz >= freq_rhs_in_hz) ? lhs : rhs;
+    WaveShape shape = winner.getShape();
     double min_freq_in_hz  = static_cast<double>(std::min(freq_lhs_in_hz, freq_rhs_in_hz));
-    double step = 2.0 * M_PI * min_freq_in_hz / sampleRate;
     
-    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+    double k = min_freq_in_hz / sampleRate;
+    Value out = memref::AllocOp::create(rw, loc, ty);
+    Value kV  = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(k));
 
     buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      Value s = generate_sound(k, b, l, i);
+      Value s = generate_sound(shape, kV, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -307,21 +365,27 @@ struct MaxLowering : OpConversionPattern<MaxOp> {
                   ConversionPatternRewriter &rw) const override {
     Location loc = op.getLoc();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
-    Value out = memref::AllocOp::create(rw, loc, ty);
 
     auto lhs = op.getLhs().getDefiningOp<OscOp>();
     auto rhs = op.getRhs().getDefiningOp<OscOp>();
+    if (!lhs || !rhs)
+      return rw.notifyMatchFailure(op, "max operands must be produced by aud.osc");
 
-    double freq_lhs_in_hz = lhs.getFreqAttr().getValueAsDouble();
-    double freq_rhs_in_hz = rhs.getFreqAttr().getValueAsDouble();
+    double freqLhs = lhs.getFreqAttr().getValueAsDouble();
+    double freqRhs = rhs.getFreqAttr().getValueAsDouble();
 
-    double min_freq_in_hz  = static_cast<double>(std::max(freq_lhs_in_hz, freq_rhs_in_hz));
-    double step = 2.0 * M_PI * min_freq_in_hz / sampleRate;
-    
-    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
+    OscOp winner = (freqLhs >= freqRhs) ? lhs : rhs;
+    WaveShape shape = winner.getShape();
+    double maxFreqHz = std::max(freqLhs, freqRhs);
 
-    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      Value s = generate_sound(k, b, l, i);
+    double k = maxFreqHz / sampleRate;                  // ciclos/amostra, sem 2π
+
+    Value out = memref::AllocOp::create(rw, loc, ty);
+    Value kV  = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(k));
+
+    buildLoop(rw, loc, ty.getDimSize(0),
+              [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(shape, kV, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -343,22 +407,29 @@ struct ClampLowering : OpConversionPattern<ClampOp> {
                   ConversionPatternRewriter &rw) const override {
     Location loc = op.getLoc();
     auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+
+    // o sinal de entrada precisa vir direto de uma aud.osc
+    auto osc = op.getFreq().getDefiningOp<OscOp>();
+    if (!osc)
+      return rw.notifyMatchFailure(op, "clamp operand must be produced by aud.osc");
+
+    WaveShape shape = osc.getShape();                         // shape vem da osc
+    double freqHz   = osc.getFreqAttr().getValueAsDouble();
+
+    double lo = adaptor.getMin().convertToDouble();
+    double hi = adaptor.getMax().convertToDouble();
+    if (lo > hi)
+      return rw.notifyMatchFailure(op, "min greater than max");
+
+    double clampedHz = std::clamp(freqHz, lo, hi);
+    double k = clampedHz / sampleRate;                        // ciclos/amostra, sem 2π
+
     Value out = memref::AllocOp::create(rw, loc, ty);
+    Value kV  = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(k));
 
-    auto freq = op.getFreq().getDefiningOp<OscOp>();
-    double freq_in_hz = freq.getFreqAttr().getValueAsDouble();
-
-    double max = static_cast<double>(adaptor.getMax().convertToDouble());
-    double min = static_cast<double>(adaptor.getMin().convertToDouble());
-
-    double clamped_freq_in_hz = std::clamp(freq_in_hz, min, max);
-    
-    double step = 2.0 * M_PI * clamped_freq_in_hz / sampleRate;
-    
-    Value k = arith::ConstantOp::create(rw, loc, rw.getF32FloatAttr(step));
-
-    buildLoop(rw, loc, ty.getDimSize(0), [&](OpBuilder &b, Location l, Value i) {
-      Value s = generate_sound(k, b, l, i);
+    buildLoop(rw, loc, ty.getDimSize(0),
+              [&](OpBuilder &b, Location l, Value i) {
+      Value s = generate_sound(shape, kV, b, l, i);
       memref::StoreOp::create(b, l, s, out, ValueRange{i});
     });
 
@@ -370,6 +441,35 @@ private:
   double sampleRate;
 };
 
+//struct ReverbLowering : OpConversionPattern<ReverbOp> {
+//  ReverbLowering(const TypeConverter &tc, MLIRContext *ctx, double sampleRate)
+//      : OpConversionPattern<ReverbOp>(tc, ctx), sampleRate(sampleRate) {}
+//
+//  LogicalResult
+//  matchAndRewrite(ReverbOp op, OpAdaptor adaptor,
+//                  ConversionPatternRewriter &rw) const override {
+//    Location loc = op.getLoc();
+//    auto ty = cast<MemRefType>(getTypeConverter()->convertType(op.getType()));
+//    Value out = memref::AllocOp::create(rw, loc, ty);
+//   
+//    float delay = op.getDecayAttr().getValueAsDouble();
+//    float decay = op.getDelayAttr().getValueAsDouble();
+//    auto freq_oscop     = op.getFreq().getDefiningOp<OscOp>();
+//    auto sample_oscop   = op.getSamples().getDefiningOp<OscOp>();
+//    
+//    float freq_in_hz = freq_oscop.getFreqAttr().getValueAsDouble();
+//    uint64_t sample = sample_oscop.getSamplesAttr().getValueAsInteger();
+//    double step = 2.0 * M_PI * freq_in_hz / sampleRate;
+//
+//    float g = std::pow(10, (-3*delay/(decay*sample)));
+//
+//    rw.replaceOp(op, out);
+//    return success();
+//  }
+//
+//private:
+//  double sampleRate;
+//};
 
 struct CastLowering : OpConversionPattern<UnrealizedConversionCastOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -420,6 +520,10 @@ struct ConvertAudToStdPass
     tc.addConversion([](Type t) { return t; });
     tc.addConversion([n](SigType t) -> Type {
       return MemRefType::get({n}, t.getElementType());
+    });
+
+    tc.addConversion([](SigType t) -> Type {
+      return MemRefType::get({ShapedType::kDynamic}, t.getElementType());
     });
 
     ConversionTarget target(*ctx);

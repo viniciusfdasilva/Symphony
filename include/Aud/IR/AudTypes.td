@@ -9,10 +9,10 @@ class Aud_Type<string name, string typeMnemonic, list<Trait> traits = []>
   let mnemonic = typeMnemonic;
 }
 
-def Aud_SigType : Aud_Type<"Sig", "sig"> {
-  let summary = "Audio-rate signal";
-  let parameters = (ins "Type":$elementType, "Type":$samples);
-  let assemblyFormat = "`<` $elementType `,` $samples `>`";
+def Aud_SigType : TypeDef<Aud_Dialect, "Sig"> {
+  let mnemonic = "sig";
+  let parameters = (ins "Type":$elementType, "Type":$lengthType);
+  let assemblyFormat = "`<` $elementType `,` $lengthType `>`";
 }
 
 #endif // AUD_TYPES

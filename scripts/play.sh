@@ -69,6 +69,7 @@ fi
 
 echo "==> Playing with: $PLAYER"
 # intentionally unquoted so a player with arguments works, e.g. "ffplay -nodisp -autoexit"
+echo $WAV
 $PLAYER "$WAV"
 
-rm -rf "$WAV" # Removing bebore running
+# rm -rf "$WAV" # Removing bebore running

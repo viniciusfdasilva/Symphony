@@ -6,6 +6,7 @@ include "mlir/Interfaces/SideEffectInterfaces.td"
 include "mlir/Interfaces/InferTypeOpInterface.td"
 include "Aud/IR/AudDialect.td"
 include "Aud/IR/AudTypes.td"
+include "Aud/IR/AudEnum.td"
 
 class Aud_Op<string mnemonic, list<Trait> traits = []> :
     Op<Aud_Dialect, mnemonic, traits>;
@@ -82,9 +83,18 @@ def Aud_ClampOp : Aud_Op<"clamp", [Pure, SameOperandsAndResultType]> {
   let hasVerifier = 1;
 }
 
+def Aud_ReverbOp : Aud_Op<"reverb", [Pure, SameOperandsAndResultType]> {
+  let summary   = "Reverb from signal";
+  let arguments = (ins Aud_SigType:$freq, F32Attr:$delay, F32Attr:$decay);
+  let results   = (outs Aud_SigType:$output);
+  let assemblyFormat = "$freq `,` $delay `,` $decay attr-dict `:` type($output)";
+  let hasVerifier = 1;
+}
+
 def Aud_OscOp : Aud_Op<"osc", [Pure]> {
   let summary = "Sine oscillator (MVP: stateless, starts at phase 0)";
-  let arguments = (ins F32Attr:$freq,
+  let arguments = (    ins Aud_WaveShapeAttr:$shape,
+                       F32Attr:$freq,
                        ConfinedAttr<I32Attr, [IntPositive]>:$samples);
   let results = (outs Aud_SigType:$output);
   let assemblyFormat = "attr-dict `:` type($output)";

@@ -66,7 +66,7 @@ cd Symphony
 
 ```bash
 ./build/bin/aud-opt examples/chord.mlir
-./scripts/play.sh <player> examples/chord.mlir
+./scripts/play.py <player> examples/chord.mlir
 ```
 
 `play.sh` usage: `<player> <input.mlir> [seconds] [output.wav]`. Use `none` as the player to only generate the WAV.

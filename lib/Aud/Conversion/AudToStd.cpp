@@ -58,22 +58,29 @@ static Value generate_sound(WaveShape shape, Value k, OpBuilder b, Location l, V
       return math::SinOp::create(b, l, x);
     }
 
-    case WaveShape::Square:
-    case WaveShape::Pulse: {
+    case WaveShape::Square: {
       Value lt = arith::CmpFOp::create(b, l, arith::CmpFPredicate::OLT, p, cst(0.5));
       return arith::SelectOp::create(b, l, lt, cst(1.0), cst(-1.0));
     }
-  
+
+    case WaveShape::Pulse: {
+      Value d  = cst(0.5);
+      Value lo = arith::MulFOp::create(b, l, arith::SubFOp::create(b, l, cst(1.0), d), cst(0.5));
+      Value hi = arith::MulFOp::create(b, l, arith::AddFOp::create(b, l, cst(1.0), d), cst(0.5));
+      Value geLo = arith::CmpFOp::create(b, l, arith::CmpFPredicate::OGE, p, lo);
+      Value ltHi = arith::CmpFOp::create(b, l, arith::CmpFPredicate::OLT, p, hi);
+      Value in   = arith::AndIOp::create(b, l, geLo, ltHi);
+      return arith::SelectOp::create(b, l, in, cst(1.0), cst(0.0));
+    }
+
     case WaveShape::Saw: {
       Value x = arith::MulFOp::create(b, l, p, cst(2.0));
       return arith::SubFOp::create(b, l, x, cst(1.0));
     }
 
     case WaveShape::Triangle: {
-      Value q = frac(arith::AddFOp::create(b, l, p, cst(0.25)));
-      Value t = arith::SubFOp::create(b, l, arith::MulFOp::create(b, l, q, cst(2.0)), cst(1.0));
-      Value a = math::AbsFOp::create(b, l, t);
-      return arith::SubFOp::create(b, l, cst(1.0), arith::MulFOp::create(b, l, a, cst(2.0)));
+      Value d = math::AbsFOp::create(b, l, arith::SubFOp::create(b, l, p, cst(0.5)));
+      return arith::SubFOp::create(b, l, cst(1.0), arith::MulFOp::create(b, l, d, cst(4.0)));
     }
   }
   llvm_unreachable("unhandled WaveShape");
